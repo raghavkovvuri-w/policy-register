@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Policy Register - Dashboard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="container header-inner">
+    <div class="header-left">
+      <img src="{{ url_for('static', filename='ieg-logo.svg') }}" alt="IEG" class="logo" onerror="this.outerHTML='<span class=\'logo-text\'>IEG</span>'">
+      <img src="{{ url_for('static', filename='ucp-logo.png') }}" alt="UCP" class="logo" onerror="this.outerHTML='<span class=\'logo-text\'>UCP</span>'">
+      <h1>Policy Register</h1>
+    </div>
+    <div class="header-right">
+      <span class="user-badge">{{ username }}</span>
+      <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+<!-- Summary Cards -->
+<div class="summary-cards">
+  <div class="summary-card" onclick="filterByStatus('')">
+    <div class="count">{{ counts.OVERDUE + counts.DUE_SOON + counts.CURRENT + counts.MISSING_DATA }}</div>
+    <div class="label">Total Policies</div>
+  </div>
+  <div class="summary-card card-overdue" onclick="filterByStatus('OVERDUE')">
+    <div class="count">{{ counts.OVERDUE }}</div>
+    <div class="label">Overdue</div>
+  </div>
+  <div class="summary-card card-soon" onclick="filterByStatus('DUE_SOON')">
+    <div class="count">{{ counts.DUE_SOON }}</div>
+    <div class="label">Due Soon</div>
+  </div>
+  <div class="summary-card card-current" onclick="filterByStatus('CURRENT')">
+    <div class="count">{{ counts.CURRENT }}</div>
+    <div class="label">Current</div>
+  </div>
+  <div class="summary-card card-nodata" onclick="filterByStatus('MISSING_DATA')">
+    <div class="count">{{ counts.MISSING_DATA }}</div>
+    <div class="label">No Date</div>
+  </div>
+</div>
+
+<!-- Charts Section (Landing) -->
+<div id="charts-section" class="charts-section">
+  {% set total_policies = counts.OVERDUE + counts.DUE_SOON + counts.CURRENT + counts.MISSING_DATA %}
+  {% set total_missing = completeness.values()|map(attribute='missing_review')|sum %}
+  {% set total_missing_owner = completeness.values()|map(attribute='missing_owner')|sum %}
+  <!-- Key Insights Row -->
+  <div class="stats-row">
+    <div class="stat-item">
+      <div class="stat-value" style="color:var(--overdue)">{{ ((counts.OVERDUE / total_policies) * 100)|round|int }}%</div>
+      <div class="stat-label">Policies Overdue ({{ counts.OVERDUE }})</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" style="color:var(--current)">{{ ((counts.CURRENT / total_policies) * 100)|round|int }}%</div>
+      <div class="stat-label">Up to Date ({{ counts.CURRENT }})</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">{{ total_missing }}</div>
+      <div class="stat-label">Missing Review Date</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">{{ tier3_count }}</div>
+      <div class="stat-label">Review Suggestions</div>
+    </div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-card">
+      <h3>Review Status Breakdown</h3>
+      <canvas id="statusChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Top Categories (by policy count)</h3>
+      <canvas id="categoryChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Review Suggestions by Confidence</h3>
+      <canvas id="confidenceChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('register', this)">Register</button>
+  <button class="tab-btn" onclick="switchTab('action', this)">Action Required <span class="tab-badge">{{ counts.OVERDUE + counts.DUE_SOON }}</span></button>
+  <button class="tab-btn" onclick="switchTab('comparisons', this)">Comparisons</button>
+  <button class="tab-btn" onclick="switchTab('review', this)">Review Suggestions</button>
+</div>
+
+<!-- Register Tab -->
+<div id="tab-register" class="tab-content active">
+  <div class="filters">
+    <input type="text" id="searchInput" placeholder="Search policies..." oninput="filterTable()">
+    <select id="sourceFilter" onchange="filterTable()">
+      <option value="">All Sources</option>
+      <option value="ieg_central">IEG</option>
+      <option value="ucp">UCP</option>
+    </select>
+    <select id="statusFilter" onchange="filterTable()">
+      <option value="">All Statuses</option>
+      <option value="OVERDUE">Overdue</option>
+      <option value="DUE_SOON">Due Soon</option>
+      <option value="CURRENT">Current</option>
+      <option value="MISSING_DATA">No Date</option>
+    </select>
+    <select id="categoryFilter" onchange="filterTable()">
+      <option value="">All Categories</option>
+      <option value="finance">Finance</option>
+      <option value="academic">Academic</option>
+      <option value="governance">Governance</option>
+      <option value="safeguarding">Safeguarding</option>
+      <option value="hr">HR</option>
+      <option value="health and safety">Health &amp; Safety</option>
+      <option value="data protection">Data Protection</option>
+      <option value="equality">Equality &amp; Diversity</option>
+      <option value="estates">Estates &amp; Facilities</option>
+      <option value="it">IT</option>
+      <option value="student">Student Services</option>
+      <option value="quality">Quality</option>
+    </select>
+  </div>
+  <div class="table-wrap">
+  <table id="policyTable">
+    <thead><tr>
+      <th onclick="sortTable(0)">Policy</th>
+      <th onclick="sortTable(1)">Source</th>
+      <th onclick="sortTable(2)">Status</th>
+      <th onclick="sortTable(3)">Review</th>
+      <th>PDF</th>
+    </tr></thead>
+    <tbody>
+    {% for p in policies %}
+    <tr class="policy-row" data-source="{{ p.source }}" data-status="{{ p.status }}" data-categories="{{ p.categories|join(',')|lower if p.categories else '' }}" onclick="toggleDetail(this)">
+      <td class="pol-name">{{ p.policy_name or p.filename }}</td>
+      <td>{{ friendly_source(p.source) }}</td>
+      <td><span class="status-badge status-{{ p.status|lower }}">{{ p.status|replace('_', ' ')|title }}</span></td>
+      <td>{{ friendly_days(p.days_until_review) }}</td>
+      <td class="pol-link"><a href="#" onclick="event.stopPropagation(); openPdf('{{ p.source }}', '{{ p.filename }}')">View PDF</a></td>
+    </tr>
+    <tr class="detail-row" style="display:none">
+      <td colspan="5">
+        <div class="detail-grid">
+          <div><strong>Owner:</strong> {{ p.owner if p.owner != 'not found' else '—' }}</div>
+          <div><strong>Review date:</strong> {{ p.next_review_date if p.next_review_date != 'not found' else '—' }}</div>
+          <div><strong>Approval date:</strong> {{ p.approval_date if p.approval_date != 'not found' else '—' }}</div>
+          <div><strong>Version:</strong> {{ p.version if p.version != 'not found' else '—' }}</div>
+          <div><strong>Frequency:</strong> {{ p.review_frequency if p.review_frequency != 'not found' else '—' }}</div>
+          <div><strong>Categories:</strong> {{ p.categories|join(', ') if p.categories else '—' }}</div>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- Action Tab -->
+<div id="tab-action" class="tab-content">
+  <p class="tab-intro">Policies requiring immediate attention, grouped by urgency.</p>
+  <div class="action-filters">
+    <select id="actionSourceFilter" onchange="filterActions()">
+      <option value="">All Sources</option>
+      <option value="ieg_central">IEG</option>
+      <option value="ucp">UCP</option>
+    </select>
+    <select id="actionCatFilter" onchange="filterActions()">
+      <option value="">All Categories</option>
+      <option value="safeguarding">Safeguarding</option>
+      <option value="finance">Finance</option>
+      <option value="academic">Academic</option>
+      <option value="governance">Governance</option>
+      <option value="hr">HR</option>
+      <option value="health and safety">Health &amp; Safety</option>
+      <option value="data protection">Data Protection</option>
+      <option value="equality">Equality &amp; Diversity</option>
+    </select>
+  </div>
+  {% set critical = [] %}
+  {% set recent = [] %}
+  {% set soon = [] %}
+  {% for p in policies %}
+    {% if p.status == 'OVERDUE' and p.days_until_review and p.days_until_review < -365 %}
+      {% set _ = critical.append(p) %}
+    {% elif p.status == 'OVERDUE' %}
+      {% set _ = recent.append(p) %}
+    {% elif p.status == 'DUE_SOON' %}
+      {% set _ = soon.append(p) %}
+    {% endif %}
+  {% endfor %}
+
+  {% if critical %}
+  <h3 class="urgency-header urgency-critical">Over 1 Year Overdue ({{ critical|length }})</h3>
+  {% for p in critical %}
+  <div class="action-card border-overdue" data-source="{{ p.source }}" data-categories="{{ p.categories|join(',')|lower if p.categories else '' }}">
+    <div class="action-header">
+      <span class="action-name">{{ p.policy_name or p.filename }}</span>
+      <span class="status-badge status-overdue">{{ friendly_days(p.days_until_review) }}</span>
+    </div>
+    <div class="action-meta">
+      <span class="source-tag {{ 'ucp' if p.source == 'ucp' else '' }}">{{ friendly_source(p.source) }}</span>
+      {% for cat in (p.categories or [])[:3] %}<span class="cat-tag">{{ cat }}</span>{% endfor %}
+      <span>Owner: {{ p.owner if p.owner != 'not found' else '—' }}</span>
+      <a href="#" onclick="openPdf('{{ p.source }}', '{{ p.filename }}')">View PDF &rarr;</a>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if recent %}
+  <h3 class="urgency-header urgency-overdue">Under 1 Year Overdue ({{ recent|length }})</h3>
+  {% for p in recent %}
+  <div class="action-card border-soon" data-source="{{ p.source }}" data-categories="{{ p.categories|join(',')|lower if p.categories else '' }}">
+    <div class="action-header">
+      <span class="action-name">{{ p.policy_name or p.filename }}</span>
+      <span class="status-badge status-overdue">{{ friendly_days(p.days_until_review) }}</span>
+    </div>
+    <div class="action-meta">
+      <span class="source-tag {{ 'ucp' if p.source == 'ucp' else '' }}">{{ friendly_source(p.source) }}</span>
+      {% for cat in (p.categories or [])[:3] %}<span class="cat-tag">{{ cat }}</span>{% endfor %}
+      <span>Owner: {{ p.owner if p.owner != 'not found' else '—' }}</span>
+      <a href="#" onclick="openPdf('{{ p.source }}', '{{ p.filename }}')">View PDF &rarr;</a>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if soon %}
+  <h3 class="urgency-header urgency-soon">Due Within 90 Days ({{ soon|length }})</h3>
+  {% for p in soon %}
+  <div class="action-card border-current" data-source="{{ p.source }}" data-categories="{{ p.categories|join(',')|lower if p.categories else '' }}">
+    <div class="action-header">
+      <span class="action-name">{{ p.policy_name or p.filename }}</span>
+      <span class="status-badge status-due_soon">{{ friendly_days(p.days_until_review) }}</span>
+    </div>
+    <div class="action-meta">
+      <span class="source-tag {{ 'ucp' if p.source == 'ucp' else '' }}">{{ friendly_source(p.source) }}</span>
+      {% for cat in (p.categories or [])[:3] %}<span class="cat-tag">{{ cat }}</span>{% endfor %}
+      <span>Owner: {{ p.owner if p.owner != 'not found' else '—' }}</span>
+      <a href="#" onclick="openPdf('{{ p.source }}', '{{ p.filename }}')">View PDF &rarr;</a>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>
+
+<!-- Comparisons Tab -->
+<div id="tab-comparisons" class="tab-content">
+  <p class="tab-intro">{{ comparisons|length }} genuine Group vs HE policy comparisons.</p>
+  {% for comp in comparisons %}
+  <details class="comparison-card">
+    <summary><strong>{{ comp.ieg_policy }}</strong> <span class="vs">vs</span> <strong>{{ comp.ucp_policy }}</strong></summary>
+    <div class="comp-body">
+      <p class="comp-summary">{{ comp.comparison.summary }}</p>
+      {% if comp.comparison.substantive_differences %}
+      <h5>Key Differences</h5>
+      <ul>{% for d in comp.comparison.substantive_differences %}<li>{{ d }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if comp.comparison.contradictions and comp.comparison.contradictions|length > 0 %}
+      <h5>Contradictions</h5>
+      <ul class="contradictions">{% for c in comp.comparison.contradictions %}<li>{{ c }}</li>{% endfor %}</ul>
+      {% else %}
+      <p class="no-issues">No contradictions identified.</p>
+      {% endif %}
+    </div>
+  </details>
+  {% endfor %}
+</div>
+
+<!-- Review Suggestions Tab -->
+<div id="tab-review" class="tab-content">
+  <p class="tab-intro">{{ tier3_count }} AI-generated review prompts grouped by policy. Sorted by issue count — policies needing most attention first.</p>
+
+  <!-- Summary stats -->
+  <div class="review-stats-bar">
+    <span class="rs-item"><strong>{{ tier3_confidence.high }}</strong> High confidence</span>
+    <span class="rs-item rs-med"><strong>{{ tier3_confidence.medium }}</strong> Medium</span>
+    <span class="rs-item rs-low"><strong>{{ tier3_confidence.low }}</strong> Low</span>
+  </div>
+
+  <!-- Filters -->
+  <div class="review-controls">
+    <select id="reviewSourceFilter" onchange="filterPolicyCards()">
+      <option value="">All Sources</option>
+      <option value="ieg_central">IEG</option>
+      <option value="ucp">UCP</option>
+    </select>
+    <select id="reviewCatFilter" onchange="filterPolicyCards()">
+      <option value="">All Categories</option>
+      <option value="finance">Finance</option>
+      <option value="academic">Academic</option>
+      <option value="governance">Governance</option>
+      <option value="safeguarding">Safeguarding</option>
+      <option value="hr">HR</option>
+      <option value="health and safety">Health &amp; Safety</option>
+      <option value="data protection">Data Protection</option>
+      <option value="equality">Equality</option>
+    </select>
+    <span class="review-summary-text">{{ suggestions_grouped|length }} policies with suggestions</span>
+  </div>
+
+  <!-- Policy cards -->
+  <div id="policyCards">
+    {% for sg in suggestions_grouped %}
+    <details class="policy-suggestion-card" data-source="{{ sg.source }}" data-categories="{{ sg.categories|join(',')|lower }}">
+      <summary>
+        <div class="psc-header">
+          <span class="psc-name">{{ sg.policy_name }}</span>
+          <div class="psc-actions">
+            <a href="/pdf/{{ sg.source }}/{{ sg.source_file }}" target="_blank" class="psc-pdf-link" onclick="event.stopPropagation()">View PDF ↗</a>
+            <span class="psc-count">{{ sg.count }} issue{{ 's' if sg.count != 1 else '' }}</span>
+          </div>
+        </div>
+        <div class="psc-meta">
+          <span class="psc-source {{ 'ucp' if sg.source == 'ucp' else 'ieg' }}">{{ friendly_source(sg.source) }}</span>
+          {% for cat in sg.categories[:4] %}<span class="psc-cat">{{ cat }}</span>{% endfor %}
+          <span class="psc-conf">
+            {% if sg.by_confidence.high %}<span class="conf-dot high">{{ sg.by_confidence.high }}H</span>{% endif %}
+            {% if sg.by_confidence.medium %}<span class="conf-dot med">{{ sg.by_confidence.medium }}M</span>{% endif %}
+            {% if sg.by_confidence.low %}<span class="conf-dot low">{{ sg.by_confidence.low }}L</span>{% endif %}
+          </span>
+        </div>
+      </summary>
+      <div class="psc-items" id="psc-{{ loop.index }}"></div>
+    </details>
+    {% endfor %}
+  </div>
+</div>
+
+</div>
+
+<!-- PDF Modal -->
+<div id="pdfModal" class="modal" style="display:none">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span id="pdfTitle">Document</span>
+      <button onclick="closePdf()" class="modal-close">&times;</button>
+    </div>
+    <iframe id="pdfFrame" src="" class="pdf-frame"></iframe>
+  </div>
+</div>
+
+<footer>
+  <div class="container">Policy Register v2 &middot; Inspire Education Group &middot; AI-assisted, for governance review only</div>
+</footer>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script>
+// Chart data from server
+const chartData = {
+  status: {
+    overdue: {{ counts.OVERDUE }},
+    dueSoon: {{ counts.DUE_SOON }},
+    current: {{ counts.CURRENT }},
+    noDate: {{ counts.MISSING_DATA }}
+  },
+  categories: {{ categories|tojson }},
+  confidence: {{ tier3_confidence|tojson }}
+};
+initCharts(chartData);
+</script>
+</body>
+</html>

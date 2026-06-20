@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 50" fill="white">
+  <!-- UCP leaf/petal motif -->
+  <g transform="translate(8, 8) scale(0.42)">
+    <path d="M40,0 C55,15 55,25 40,40 C25,25 25,15 40,0Z" fill="#43B9AC"/>
+    <path d="M40,0 C55,15 65,15 80,0 C65,15 55,15 40,0Z" fill="#43B9AC" transform="rotate(90, 40, 40)"/>
+    <path d="M40,80 C55,65 55,55 40,40 C25,55 25,65 40,80Z" fill="#43B9AC"/>
+    <path d="M0,40 C15,55 25,55 40,40 C25,25 15,25 0,40Z" fill="#43B9AC"/>
+    <path d="M80,40 C65,55 55,55 40,40 C55,25 65,25 80,40Z" fill="#43B9AC"/>
+    <!-- Inner star -->
+    <path d="M40,20 L44,36 L60,40 L44,44 L40,60 L36,44 L20,40 L36,36Z" fill="white"/>
+  </g>
+  <!-- UCP text -->
+  <text x="48" y="32" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="white" letter-spacing="2">UCP</text>
+</svg>

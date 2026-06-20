@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>PDF Viewer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #2a2a2a; overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-family: 'Inter', sans-serif; }
+#toolbar { background: #1B1F3B; padding: 10px 20px; display: flex; align-items: center; gap: 12px; color: white; font-size: 0.85rem; }
+#toolbar input { padding: 7px 14px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white; font-size: 0.85rem; width: 280px; font-family: inherit; }
+#toolbar input::placeholder { color: rgba(255,255,255,0.5); }
+#toolbar button { padding: 7px 16px; border-radius: 5px; border: none; background: #43B9AC; color: white; cursor: pointer; font-size: 0.82rem; font-weight: 500; font-family: inherit; }
+#toolbar button:hover { background: #2E9A8E; }
+#toolbar .highlight-info { color: #43B9AC; font-weight: 500; font-size: 0.82rem; }
+#toolbar .close-btn { margin-left: auto; background: none; border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 1.2rem; padding: 4px 12px; cursor: pointer; }
+#toolbar .close-btn:hover { background: rgba(255,255,255,0.1); }
+#viewer-container { flex: 1; overflow: auto; padding: 16px 0; }
+canvas { display: block; margin: 12px auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5); border-radius: 2px; }
+.text-layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; line-height: 1.0; pointer-events: none; }
+.text-layer mark { background: #FFD600; color: transparent; padding: 2px 1px; border-radius: 2px; opacity: 0.5; position: absolute; }
+.text-layer mark.first { background: #FF6B35; opacity: 0.7; animation: pulse 1.5s ease-in-out 3; }
+@keyframes pulse { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+.page-container { position: relative; margin: 12px auto; }
+.page-num { text-align: center; color: #888; font-size: 0.75rem; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <input type="text" id="searchBox" placeholder="Type keywords to highlight..." value="{{ search_text }}">
+  <button onclick="doSearch()">Find &amp; Highlight</button>
+  <span id="highlightInfo" class="highlight-info"></span>
+  <button class="close-btn" onclick="window.parent.closePdf()">&times; Close</button>
+</div>
+<div id="viewer-container"></div>
+
+<script type="module">
+import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+
+const pdfUrl = '{{ pdf_url }}';
+const initialSearch = '{{ search_text }}';
+const container = document.getElementById('viewer-container');
+let pdfDoc = null;
+let pages = [];
+
+async function loadPdf() {
+  try {
+    pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+  } catch(e) {
+    container.innerHTML = '<p style="color:#f88;text-align:center;padding:40px;">Failed to load PDF. The file may not exist.</p>';
+    return;
+  }
+  const numPages = pdfDoc.numPages;
+
+  for (let i = 1; i <= numPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const scale = 1.4;
+    const viewport = page.getViewport({ scale });
+
+    const pageDiv = document.createElement('div');
+    pageDiv.className = 'page-container';
+    pageDiv.style.width = viewport.width + 'px';
+    pageDiv.style.height = viewport.height + 'px';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    pageDiv.appendChild(canvas);
+
+    const textLayerDiv = document.createElement('div');
+    textLayerDiv.className = 'text-layer';
+    textLayerDiv.style.width = viewport.width + 'px';
+    textLayerDiv.style.height = viewport.height + 'px';
+    pageDiv.appendChild(textLayerDiv);
+
+    container.appendChild(pageDiv);
+
+    // Page number
+    const pn = document.createElement('div');
+    pn.className = 'page-num';
+    pn.textContent = `Page ${i} of ${numPages}`;
+    container.appendChild(pn);
+
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    const textContent = await page.getTextContent();
+    pages.push({ page, viewport, textContent, textLayerDiv });
+  }
+
+  if (initialSearch) {
+    document.getElementById('searchBox').value = initialSearch;
+    setTimeout(doSearch, 300);
+  }
+}
+
+window.doSearch = function() {
+  const rawQuery = document.getElementById('searchBox').value.trim();
+  if (!rawQuery) return;
+
+  // Split into individual keywords (ignore short words)
+  const keywords = rawQuery.toLowerCase()
+    .split(/\s+/)
+    .filter(w => w.length > 2)
+    .slice(0, 8); // max 8 keywords
+
+  if (keywords.length === 0) return;
+
+  let totalHighlights = 0;
+  let firstHighlight = null;
+
+  pages.forEach(({ viewport, textContent, textLayerDiv }) => {
+    textLayerDiv.innerHTML = '';
+
+    textContent.items.forEach(item => {
+      const text = item.str;
+      if (!text.trim()) return;
+
+      const textLower = text.toLowerCase();
+      const matched = keywords.some(kw => textLower.includes(kw));
+
+      if (matched) {
+        const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+        const mark = document.createElement('mark');
+        mark.style.left = tx[4] + 'px';
+        mark.style.top = (viewport.height - tx[5] - Math.abs(tx[0])) + 'px';
+        mark.style.fontSize = Math.abs(tx[0]) + 'px';
+        mark.style.width = item.width * viewport.scale + 'px';
+        mark.style.height = (Math.abs(tx[0]) + 4) + 'px';
+        mark.textContent = text;
+
+        if (totalHighlights === 0) {
+          mark.className = 'first';
+          firstHighlight = mark;
+        }
+        textLayerDiv.appendChild(mark);
+        totalHighlights++;
+      }
+    });
+  });
+
+  const info = document.getElementById('highlightInfo');
+  if (totalHighlights > 0) {
+    info.textContent = `${totalHighlights} matches highlighted`;
+    info.style.color = '#43B9AC';
+    if (firstHighlight) {
+      firstHighlight.closest('.page-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  } else {
+    info.textContent = 'No matches found — try different keywords';
+    info.style.color = '#F4A261';
+  }
+};
+
+document.getElementById('searchBox').addEventListener('keydown', e => {
+  if (e.key === 'Enter') window.doSearch();
+});
+
+loadPdf();
+</script>
+</body>
+</html>

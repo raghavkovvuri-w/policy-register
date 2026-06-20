@@ -1,0 +1,19 @@
+# Sensitive / local config
+.claude/
+.env
+
+# Downloaded PDFs (large files, not needed in repo)
+data/policies/
+
+# Output folder
+output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+Thumbs.db
+.DS_Store

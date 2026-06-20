@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "institution": "Inspire Education Group",
+    "version": "2.1",
+    "last_updated": "2026-06-20"
+  },
+  "sources": {
+    "public": {
+      "ieg_central": {
+        "url": "https://www.ieg.ac.uk/documents/",
+        "type": "web_directory",
+        "note": "Group-wide register. Covers Peterborough College, Stamford College and all group policies. Uses a 'Load More' button and category filters, including a University Centre Peterborough category.",
+        "active": true
+      },
+      "ucp": {
+        "url": "https://www.ucp.ac.uk/discover/commitments-and-standards/published-documents/",
+        "type": "web_directory",
+        "note": "UCP HE-specific published documents (Open University and Pearson provision).",
+        "active": true
+      }
+    },
+    "internal": {
+      "google_drive": {
+        "folder_id": "",
+        "type": "google_drive",
+        "active": false
+      }
+    }
+  }
+}
