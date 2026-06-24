@@ -11,7 +11,6 @@ A tool that pulls every published policy from the Inspire Education Group instit
 
 - Python 3.10+
 - Playwright for Python (handles JavaScript-loaded pages)
-- Anthropic API key
 
 ## Setup
 
@@ -22,9 +21,7 @@ pip install playwright httpx pypdf anthropic
 # Install Playwright browsers
 playwright install chromium
 
-# Set API key
-set ANTHROPIC_API_KEY=your-key-here    (Windows)
-export ANTHROPIC_API_KEY=your-key-here  (Mac/Linux)
+
 ```
 
 ## Running
